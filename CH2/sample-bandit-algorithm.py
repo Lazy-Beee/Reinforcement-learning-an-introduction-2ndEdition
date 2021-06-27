@@ -44,7 +44,7 @@ class EpsGreedyMachine:
         if curr_arm == self.best_action:
             self.best_action_count += 1
         self.r.append(self.bandit_machine.bandit(curr_arm))
-        self.avg_r += sum(self.q)/len(self.r)
+        self.avg_r = sum(self.q)
         self.n[curr_arm] += 1
         self.q[curr_arm] += (self.r[-1] - self.q[curr_arm]) / self.n[curr_arm]
         return self.act()
@@ -76,16 +76,16 @@ class EpsGreedyMachine:
             plt.plot(steps, bac_percentage)
             plt.xlabel('steps')
             plt.ylabel('optimal action (%)')
-            plt.show()
             plt.savefig('optimal action vs steps.png')
+            plt.show()
             plt.close()
 
             # best option percentage vs. steps
             plt.plot(steps, self.record["avg_r"])
             plt.xlabel('steps')
             plt.ylabel('average reward')
-            plt.show()
             plt.savefig('average reward vs steps.png')
+            plt.show()
             plt.close()
 
     def _record_data(self):
@@ -127,5 +127,5 @@ class MultiArmBandit:
 
 if __name__ == "__main__":
     test_machine = EpsGreedyMachine(gen_fig=True)
-    test_machine.simulate(runs=50000)
+    test_machine.simulate(runs=10000)
     test_machine.disp_result()
