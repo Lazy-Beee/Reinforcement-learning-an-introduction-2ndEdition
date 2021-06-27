@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 class EpsGreedyMachine:
     """
     When activated, for a probability of eps, select a random option.
-    Otherwise select the option with largest reward.
+    Otherwise select the option with largest estimated reward.
     """
 
     def __init__(self, eps=0.1, arm_num=10, params=(20, 50, 5), gen_fig=False):
@@ -49,7 +49,7 @@ class EpsGreedyMachine:
         self.q[curr_arm] += (self.r[-1] - self.q[curr_arm]) / self.n[curr_arm]
         return self.act()
 
-    def simulate(self, runs=1000000):
+    def simulate(self, runs=1000):
         """Simulate, count and return how many times each option is chosen."""
         self.runs = runs
         for i in trange(self.runs):
@@ -101,13 +101,13 @@ class MultiArmBandit:
     A multi-arm bandit (arm 0 to n-1) with random parameters.
     For each arm pressed, returns an integer based on normal distribution of arm parameter.
     """
-    def __init__(self, arm_num=10, params=(20, 50, 5)):
+    def __init__(self, arm_num=10, params=(20, 50, 10)):
         self.arm_num = arm_num
         self.arms = [0] * arm_num
         # params = (lower boundary, upper boundary, standard division) of arm results
         self.lower_bound = params[0]
         self.upper_bound = params[1]
-        self.std_div = params[2]
+        self.range = params[2]
         self._init_arm_params()
 
     def _init_arm_params(self):
@@ -118,7 +118,7 @@ class MultiArmBandit:
     def bandit(self, arm_pressed):
         """Return result of arm_pressed"""
         arm_param = self.arms[arm_pressed]
-        return np.random.randint(arm_param - 10, arm_param + 11)
+        return np.random.randint(arm_param - self.range, arm_param + self.range + 1)
 
     def find_best_action(self):
         """Return arm with highest reward"""
