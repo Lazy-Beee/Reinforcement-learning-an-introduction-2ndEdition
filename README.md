@@ -5,3 +5,5 @@ Thanks book author Richard S. Sutton, Andrew G. Barto, Code by Shangtong Zhang, 
 contributors.
 
 Source: [Reinforcement Learning: An Introduction](http://incompleteideas.net/book/the-book-2nd.html)
+
+Summer 2021 Boston, MA
