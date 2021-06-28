@@ -6,4 +6,4 @@ contributors.
 
 Source: [Reinforcement Learning: An Introduction](http://incompleteideas.net/book/the-book-2nd.html)
 
-Summer 2021 Boston, MA 
+Summer 2021 Boston, MA
