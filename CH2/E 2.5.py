@@ -93,7 +93,7 @@ class EpsGreedyMachine:
             plt.plot(steps, bac_percentage)
             plt.xlabel('steps')
             plt.ylabel('optimal action (%)')
-            plt.savefig('E2.5 optimal action vs steps.png')
+            plt.savefig('image/E2.5 optimal action vs steps.png')
             plt.show()
             plt.close()
 
@@ -101,7 +101,7 @@ class EpsGreedyMachine:
             plt.plot(steps, self.record["avg_r"])
             plt.xlabel('steps')
             plt.ylabel('average reward')
-            plt.savefig('E2.5 average reward vs steps.png')
+            plt.savefig('image/E2.5 average reward vs steps.png')
             plt.show()
             plt.close()
 

@@ -10,50 +10,62 @@ from tqdm import trange
 import matplotlib.pyplot as plt
 
 
-class EpsGreedyMachine:
+class SampleMachine:
     """
     When activated, for a probability of eps, select a random option.
     Otherwise select the option with largest estimated reward.
     """
 
-    def __init__(self, eps=0.1, arm_num=10, params=(20, 50, 5), gen_fig=False):
+    def __init__(self, eps=0.1, c=2, arm_num=10, params=(20, 50, 5),
+                 gen_fig=False, ucb_used=False):
         self.q = [0] * arm_num
         self.n = [0] * arm_num
         self.r = []
         self.options_count = arm_num
         self.eps = eps
+        self.c = c
         self.gen_fig = gen_fig
+        self.ucb_used = ucb_used
         self.runs = 0
         self.avg_r = 0
         self.best_action_count = 0
         self.record = {"q": [], "n": [], "bac": [], "avg_r": []}
 
         self.bandit_machine = MultiArmBandit(arm_num=arm_num, params=params)
-        self.best_action = self.bandit_machine.find_best_action()
+        # self.best_action = self.bandit_machine.find_best_action()
 
-    def act(self):
+    def act_eps_greedy(self):
         """Act based on possibilities, return the index of the chosen option"""
         if np.random.random() >= self.eps:
-            return self.q.index(max(self.q))
+            return self._random_max_index(self.q)
         else:
             return np.random.randint(0, self.options_count)
 
-    def step(self):
+    def act_ucb(self):
+        """Return the index of the largest ucb value"""
+        ucb_q = [0] * self.options_count
+        for i in range(len(ucb_q)):
+            ucb_q[i] = self.q[i] + self.c * np.sqrt(np.log(self.runs) / (self.n[i] + 1e-5))
+        return self._random_max_index(ucb_q)
+
+    def step(self, curr_arm):
         """Perform an act and update parameters"""
-        curr_arm = self.act()
-        if curr_arm == self.best_action:
+        if curr_arm == self.bandit_machine.find_best_action():
             self.best_action_count += 1
         self.r.append(self.bandit_machine.bandit(curr_arm))
-        self.avg_r = sum(self.q)
+        self.avg_r = sum(self.r)/self.runs
         self.n[curr_arm] += 1
         self.q[curr_arm] += (self.r[-1] - self.q[curr_arm]) / self.n[curr_arm]
-        return self.act()
 
     def simulate(self, runs=1000):
         """Simulate, count and return how many times each option is chosen."""
-        self.runs = runs
-        for i in trange(self.runs):
-            self.step()
+        for i in trange(runs):
+            self.runs += 1
+            if self.ucb_used:
+                curr_arm = self.act_ucb()
+            else:
+                curr_arm = self.act_eps_greedy()
+            self.step(curr_arm)
             self._record_data()
 
     def disp_result(self):
@@ -76,7 +88,7 @@ class EpsGreedyMachine:
             plt.plot(steps, bac_percentage)
             plt.xlabel('steps')
             plt.ylabel('optimal action (%)')
-            plt.savefig('optimal action vs steps.png')
+            plt.savefig('image/optimal action vs steps.png')
             plt.show()
             plt.close()
 
@@ -84,7 +96,7 @@ class EpsGreedyMachine:
             plt.plot(steps, self.record["avg_r"])
             plt.xlabel('steps')
             plt.ylabel('average reward')
-            plt.savefig('average reward vs steps.png')
+            plt.savefig('image/average reward vs steps.png')
             plt.show()
             plt.close()
 
@@ -95,13 +107,26 @@ class EpsGreedyMachine:
         self.record["bac"].append(self.best_action_count)
         self.record["avg_r"].append(self.avg_r)
 
+    def _random_max_index(self, values):
+        max_val = np.max(values)
+        i, ind = 0, []
+        for val in values:
+            if val == max_val:
+                ind.append(i)
+            i = i + 1
+        if len(ind) > 1:
+            ind = np.random.choice(ind)
+        else:
+            ind = ind[0]
+        return ind
+
 
 class MultiArmBandit:
     """
     A multi-arm bandit (arm 0 to n-1) with random parameters.
     For each arm pressed, returns an integer based on normal distribution of arm parameter.
     """
-    def __init__(self, arm_num=10, params=(20, 50, 10)):
+    def __init__(self, arm_num, params):
         self.arm_num = arm_num
         self.arms = [0] * arm_num
         # params = (lower boundary, upper boundary, standard division) of arm results
@@ -126,6 +151,6 @@ class MultiArmBandit:
 
 
 if __name__ == "__main__":
-    test_machine = EpsGreedyMachine(gen_fig=True)
+    test_machine = SampleMachine(gen_fig=True, ucb_used=True)
     test_machine.simulate(runs=10000)
     test_machine.disp_result()
