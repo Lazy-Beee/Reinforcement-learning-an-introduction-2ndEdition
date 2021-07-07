@@ -50,30 +50,37 @@ class CarRental:
     def expected_return(self, state, action, state_value):
         """Calculate expected return under specific state and action"""
         returns = - self.MOVE_CAR_COST * abs(action)
+
         num_of_cars_first = min(state[0] - action, self.MAX_CARS)
         num_of_cars_second = min(state[1] + action, self.MAX_CARS)
 
         for rental_request_first in range(self.POISSON_UPPER_BOUND):
             for rental_request_second in range(self.POISSON_UPPER_BOUND):
-                prob_rental = poisson_probability(rental_request_first, self.RENTAL_REQUEST_FIRST) * \
-                              poisson_probability(rental_request_second, self.RENTAL_REQUEST_SECOND)
+                prob_rental = poisson_probability(rental_request_first,
+                                                  self.RENTAL_REQUEST_FIRST) * \
+                              poisson_probability(rental_request_second,
+                                                  self.RENTAL_REQUEST_SECOND)
                 valid_rental_first = min(num_of_cars_first, rental_request_first)
                 valid_rental_second = min(num_of_cars_second, rental_request_second)
 
                 reward = (valid_rental_first + valid_rental_second) * self.RENTAL_CREDIT
-                num_of_cars_first_after = num_of_cars_first - valid_rental_first
-                num_of_cars_second_after = num_of_cars_second - valid_rental_second
+                num_of_cars_first -= valid_rental_first
+                num_of_cars_second -= valid_rental_second
 
                 for returned_cars_first in range(self.POISSON_UPPER_BOUND):
                     for returned_cars_second in range(self.POISSON_UPPER_BOUND):
-                        prob_return = poisson_probability(returned_cars_first, self.RETURNS_FIRST) * \
-                                      poisson_probability(returned_cars_second, self.RETURNS_SECOND)
+                        prob_return = poisson_probability(returned_cars_first,
+                                                          self.RETURNS_FIRST) * \
+                                      poisson_probability(returned_cars_second,
+                                                          self.RETURNS_SECOND)
                         prob_total = prob_rental * prob_return
-                        num_of_cars_first_after = min(num_of_cars_first_after + returned_cars_first, self.MAX_CARS)
-                        num_of_cars_second_after = min(num_of_cars_second_after + returned_cars_second, self.MAX_CARS)
+                        num_of_cars_first = min(num_of_cars_first + returned_cars_first,
+                                                self.MAX_CARS)
+                        num_of_cars_second = min(num_of_cars_second + returned_cars_second,
+                                                 self.MAX_CARS)
 
-                        returns += prob_total * (reward + self.DISCOUNT * state_value[num_of_cars_first_after,
-                                                                                      num_of_cars_second_after])
+                        returns += prob_total * (reward + self.DISCOUNT *
+                                                 state_value[num_of_cars_first, num_of_cars_second])
         return returns
 
     def update_policy(self):
@@ -101,15 +108,16 @@ class CarRental:
                             action_returns.append(self.expected_return([i, j], action, self.value))
                         else:
                             action_returns.append(-np.inf)
+                    print(action_returns)
                     self.policy[i, j] = self.actions[np.argmax(action_returns)]
                     if policy_stable and old_action != self.policy[i, j]:
                         policy_stable = False
             print('policy stable {}'.format(policy_stable))
-            print("\nPOLICY:")
-            print(self.policy)
-            print("\nVALUE:")
-            print(self.value.round())
             if policy_stable:
+                print("\nPLOICY:")
+                print(self.policy)
+                print("\nVALUE:")
+                print(self.value.round())
                 break
             self.iter += 1
 
@@ -137,4 +145,4 @@ class CarRental:
 if __name__ == "__main__":
     jack = CarRental()
     jack.update_policy()
-    jack.plot_policy()
+    # jack.plot_policy()
