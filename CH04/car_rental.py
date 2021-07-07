@@ -26,10 +26,10 @@ def poisson_probability(n, lam):
 
 class CarRental:
 
-    def __init__(self, problem_modified=False):
+    def __init__(self, problem_modified=False, constant_return=False):
         """Initialize parameters"""
         # Problem settings
-        self.MAX_CARS = 20
+        self.MAX_CARS = 10
         self.MAX_MOVE_OF_CARS = 5
         self.RENTAL_REQUEST_FIRST = 3
         self.RENTAL_REQUEST_SECOND = 4
@@ -39,41 +39,61 @@ class CarRental:
         self.RENTAL_CREDIT = 10
         self.MOVE_CAR_COST = 2
         self.POISSON_UPPER_BOUND = 11
+        self.NIGHT_PARK_LIMIT = 10
+        self.NIGHT_PARK_COST = 4
 
         self.actions = np.arange(-self.MAX_MOVE_OF_CARS, self.MAX_MOVE_OF_CARS + 1)
         self.iter = 0
         self.value = np.zeros((self.MAX_CARS + 1, self.MAX_CARS + 1))
         self.policy = np.zeros(self.value.shape, dtype=int)
         self.modified = problem_modified
-        self.value_change_threshold = 1e-4
+        self.constant_return = constant_return
+        self.value_change_threshold = 1
 
     def expected_return(self, state, action, state_value):
         """Calculate expected return under specific state and action"""
-        returns = - self.MOVE_CAR_COST * abs(action)
+        if self.modified and action >= 1:
+            returns = - self.MOVE_CAR_COST * (action - 1)
+        else:
+            returns = - self.MOVE_CAR_COST * abs(action)
         num_of_cars_first = min(state[0] - action, self.MAX_CARS)
         num_of_cars_second = min(state[1] + action, self.MAX_CARS)
 
-        for rental_request_first in range(self.POISSON_UPPER_BOUND):
-            for rental_request_second in range(self.POISSON_UPPER_BOUND):
-                prob_rental = poisson_probability(rental_request_first, self.RENTAL_REQUEST_FIRST) * \
-                              poisson_probability(rental_request_second, self.RENTAL_REQUEST_SECOND)
-                valid_rental_first = min(num_of_cars_first, rental_request_first)
-                valid_rental_second = min(num_of_cars_second, rental_request_second)
+        for i in range(self.POISSON_UPPER_BOUND):
+            for j in range(self.POISSON_UPPER_BOUND):
+                prob_rental = poisson_probability(i, self.RENTAL_REQUEST_FIRST) * \
+                              poisson_probability(j, self.RENTAL_REQUEST_SECOND)
+                valid_rental_first = min(num_of_cars_first, i)
+                valid_rental_second = min(num_of_cars_second, j)
 
                 reward = (valid_rental_first + valid_rental_second) * self.RENTAL_CREDIT
                 num_of_cars_first_after = num_of_cars_first - valid_rental_first
                 num_of_cars_second_after = num_of_cars_second - valid_rental_second
 
-                for returned_cars_first in range(self.POISSON_UPPER_BOUND):
-                    for returned_cars_second in range(self.POISSON_UPPER_BOUND):
-                        prob_return = poisson_probability(returned_cars_first, self.RETURNS_FIRST) * \
-                                      poisson_probability(returned_cars_second, self.RETURNS_SECOND)
-                        prob_total = prob_rental * prob_return
-                        num_of_cars_first_after = min(num_of_cars_first_after + returned_cars_first, self.MAX_CARS)
-                        num_of_cars_second_after = min(num_of_cars_second_after + returned_cars_second, self.MAX_CARS)
+                if self.constant_return:
+                    for returned_cars_first in range(self.POISSON_UPPER_BOUND):
+                        for returned_cars_second in range(self.POISSON_UPPER_BOUND):
+                            prob_return = poisson_probability(returned_cars_first, self.RETURNS_FIRST) * \
+                                          poisson_probability(returned_cars_second, self.RETURNS_SECOND)
+                            prob_total = prob_rental * prob_return
+                            num_of_cars_first_after = min(num_of_cars_first_after + returned_cars_first, self.MAX_CARS)
+                            num_of_cars_second_after = min(num_of_cars_second_after + returned_cars_second, self.MAX_CARS)
+                            if self.modified and num_of_cars_first_after > self.NIGHT_PARK_LIMIT:
+                                reward -= self.NIGHT_PARK_COST
+                            if self.modified and num_of_cars_second_after > self.NIGHT_PARK_LIMIT:
+                                reward -= self.NIGHT_PARK_COST
+                            returns += prob_total * (reward + self.DISCOUNT * state_value[num_of_cars_first_after,
+                                                                                          num_of_cars_second_after])
+                else:
+                    num_of_cars_first_after = min(num_of_cars_first_after + self.RETURNS_FIRST, self.MAX_CARS)
+                    num_of_cars_second_after = min(num_of_cars_second_after + self.RETURNS_SECOND, self.MAX_CARS)
+                    if self.modified and num_of_cars_first_after > self.NIGHT_PARK_LIMIT:
+                        reward -= self.NIGHT_PARK_COST
+                    if self.modified and num_of_cars_second_after > self.NIGHT_PARK_LIMIT:
+                        reward -= self.NIGHT_PARK_COST
+                    returns += prob_rental * (reward + self.DISCOUNT * state_value[num_of_cars_first_after,
+                                                                                   num_of_cars_second_after])
 
-                        returns += prob_total * (reward + self.DISCOUNT * state_value[num_of_cars_first_after,
-                                                                                      num_of_cars_second_after])
         return returns
 
     def update_policy(self):
@@ -84,8 +104,7 @@ class CarRental:
                 old_value = self.value.copy()
                 for i in range(self.MAX_CARS + 1):
                     for j in range(self.MAX_CARS + 1):
-                        self.value[i, j] = self.expected_return([i, j], self.policy[i, j],
-                                                                self.value)
+                        self.value[i, j] = self.expected_return([i, j], self.policy[i, j], self.value)
                 max_value_change = abs(old_value - self.value).max()
                 print(f'iter {self.iter} max value change {max_value_change}')
                 if max_value_change < self.value_change_threshold:
@@ -131,10 +150,19 @@ class CarRental:
         fig.set_xlabel('# cars at second location', fontsize=30)
         fig.set_title('optimal value', fontsize=30)
 
-        plt.savefig('images/car_rental_value.png')
+        if self.modified:
+            if self.constant_return:
+                plt.savefig('images/car_rental_value_constant_return_modified.png')
+            else:
+                plt.savefig('images/car_rental_value_modified.png')
+        elif self.constant_return:
+            plt.savefig('images/car_rental_value_constant_return.png')
+        else:
+            plt.savefig('images/car_rental_value.png')
         plt.close()
 
+
 if __name__ == "__main__":
-    jack = CarRental()
+    jack = CarRental(problem_modified=True, constant_return=True)
     jack.update_policy()
     jack.plot_policy()
