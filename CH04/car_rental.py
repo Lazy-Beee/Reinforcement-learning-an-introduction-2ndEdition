@@ -29,7 +29,7 @@ class CarRental:
     def __init__(self, problem_modified=False, constant_return=False):
         """Initialize parameters"""
         # Problem settings
-        self.MAX_CARS = 10
+        self.MAX_CARS = 20
         self.MAX_MOVE_OF_CARS = 5
         self.RENTAL_REQUEST_FIRST = 3
         self.RENTAL_REQUEST_SECOND = 4
@@ -48,7 +48,7 @@ class CarRental:
         self.policy = np.zeros(self.value.shape, dtype=int)
         self.modified = problem_modified
         self.constant_return = constant_return
-        self.value_change_threshold = 1
+        self.value_change_threshold = 1e-4
 
     def expected_return(self, state, action, state_value):
         """Calculate expected return under specific state and action"""
@@ -70,7 +70,7 @@ class CarRental:
                 num_of_cars_first_after = num_of_cars_first - valid_rental_first
                 num_of_cars_second_after = num_of_cars_second - valid_rental_second
 
-                if self.constant_return:
+                if not self.constant_return:
                     for returned_cars_first in range(self.POISSON_UPPER_BOUND):
                         for returned_cars_second in range(self.POISSON_UPPER_BOUND):
                             prob_return = poisson_probability(returned_cars_first, self.RETURNS_FIRST) * \
@@ -102,7 +102,7 @@ class CarRental:
         while True:
             while True:
                 old_value = self.value.copy()
-                for i in range(self.MAX_CARS + 1):
+                for i in trange(self.MAX_CARS + 1):
                     for j in range(self.MAX_CARS + 1):
                         self.value[i, j] = self.expected_return([i, j], self.policy[i, j], self.value)
                 max_value_change = abs(old_value - self.value).max()
@@ -111,7 +111,7 @@ class CarRental:
                     break
 
             policy_stable = True
-            for i in range(self.MAX_CARS + 1):
+            for i in trange(self.MAX_CARS + 1):
                 for j in range(self.MAX_CARS + 1):
                     old_action = self.policy[i, j]
                     action_returns = []
@@ -150,11 +150,10 @@ class CarRental:
         fig.set_xlabel('# cars at second location', fontsize=30)
         fig.set_title('optimal value', fontsize=30)
 
-        if self.modified:
-            if self.constant_return:
-                plt.savefig('images/car_rental_value_constant_return_modified.png')
-            else:
-                plt.savefig('images/car_rental_value_modified.png')
+        if self.modified and self.constant_return:
+            plt.savefig('images/car_rental_value_constant_return_modified.png')
+        elif self.modified:
+            plt.savefig('images/car_rental_value_modified.png')
         elif self.constant_return:
             plt.savefig('images/car_rental_value_constant_return.png')
         else:
@@ -163,6 +162,6 @@ class CarRental:
 
 
 if __name__ == "__main__":
-    jack = CarRental(problem_modified=True, constant_return=True)
+    jack = CarRental(problem_modified=True, constant_return=False)
     jack.update_policy()
     jack.plot_policy()

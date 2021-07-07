@@ -145,7 +145,7 @@ def figure_4_2(constant_returned_cars=True):
                     value[i, j] = new_state_value
             max_value_change = abs(old_value - value).max()
             print('max value change {}'.format(max_value_change))
-            if max_value_change < 1e-4:
+            if max_value_change < 1:
                 break
 
         # policy improvement
