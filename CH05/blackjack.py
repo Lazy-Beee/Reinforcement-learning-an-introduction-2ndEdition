@@ -108,7 +108,7 @@ class Agent:
             if player_sum < 12:
                 self.hit()
             else:
-                states.append([player_sum - 12, self.dealer.show_card - 1, self.ace_use])
+                states.append([player_sum - 12, self.dealer_show_card - 1, self.ace_use])
                 if player_sum < 20:
                     self.hit()
                     actions.append(0)
@@ -131,15 +131,13 @@ class Agent:
             returns = 0
             for t in range(len(states) - 1, -1, -1):
                 returns = self.discount * returns + rewards[t]
-                state = states[t]
-                if state[2] == 0:
-                    state = state[0:1]
-                    self.state_count_no_ace[state] += 1
-                    self.state_values_no_ace[state] += returns
+                player_point, dealer_show, ace = states[t]
+                if ace == 0:
+                    self.state_count_no_ace[player_point, dealer_show] += 1
+                    self.state_values_no_ace[player_point, dealer_show] += returns
                 else:
-                    state = state[0:1]
-                    self.state_count_ace[state] += 1
-                    self.state_values_ace[state] += returns
+                    self.state_count_ace[player_point, dealer_show] += 1
+                    self.state_values_ace[player_point, dealer_show] += returns
 
             if i + 1 in record_points:
                 state_value_record_ace.append(self.state_values_ace/self.state_count_ace)
@@ -147,19 +145,19 @@ class Agent:
         return state_value_record_ace, state_value_record_no_ace
 
     def figure_5_1(self):
-        state_value_record_ace, state_value_record_no_ace = self.first_visit_mc_prediction(100000, [10000, 100000])
+        state_value_record_ace, state_value_record_no_ace = self.first_visit_mc_prediction(500000, [10000, 500000])
         states = [state_value_record_ace[0],
                   state_value_record_no_ace[0],
                   state_value_record_ace[1],
                   state_value_record_no_ace[1]]
 
-        titles = ['10000 Episodes, no Ace',
-                  '10000 Episodes, Ace',
-                  '100000 Episodes, no Ace',
-                  '100000 Episodes, Ace']
+        titles = ['Usable Ace, 10000 Episodes',
+                  'Usable Ace, 500000 Episodes',
+                  'No Usable Ace, 10000 Episodes',
+                  'No Usable Ace, 500000 Episodes']
 
         _, axes = plt.subplots(2, 2, figsize=(40, 30))
-        plt.subplots_adjust(wspace=0.2, hspace=0.3)
+        plt.subplots_adjust(wspace=0.1, hspace=0.2)
         axes = axes.flatten()
 
         for state, title, axis in zip(states, titles, axes):
@@ -171,7 +169,6 @@ class Agent:
 
         plt.savefig('images/figure_5_1.png')
         plt.close()
-        print(states)
 
 
 if __name__ == "__main__":
