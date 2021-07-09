@@ -59,16 +59,16 @@ class Agent:
     def __init__(self):
         """Initialize class settings"""
         self.goal = 21
-        # 0-9: points 12-21; 0-9: cards 0-10; 0-1: no ace, ace; 0-1: hit, stick
+        # Player sum: 12-21; Dealer show card: 1-10; Usable ace: no, yes; Action: hit, stick
         self.state_action_values = np.zeros((10, 10, 2, 2))
-        self.state_action_count = np.zeros((10, 10, 2, 2))
+        self.state_action_count = np.zeros((10, 10, 2, 2), dtype=int)
+        self.policy = np.zeros((10, 10, 2), dtype=int)
 
         self.state_values_ace = np.zeros((10, 10))
         self.state_values_no_ace = np.zeros((10, 10))
-        self.state_count_ace = np.zeros((10, 10))
-        self.state_count_no_ace = np.zeros((10, 10))
+        self.state_count_ace = np.zeros((10, 10), dtype=int)
+        self.state_count_no_ace = np.zeros((10, 10), dtype=int)
 
-        self.policy = np.zeros((10, 10, 2))
         self.player_cards = []
         self.dealer_show_card = 0
         self.discount = 1
@@ -83,6 +83,8 @@ class Agent:
         self.ace_use = 0
         self.dealer_show_card = self.dealer.show_card
         self.player_cards = [self.dealer.hit(), self.dealer.hit()]
+        # determine whether the player has a usable ace
+        self.card_value(self.player_cards)
 
     def hit(self):
         """Get a card from dealer"""
@@ -124,6 +126,7 @@ class Agent:
         return states, actions, rewards
 
     def first_visit_mc_prediction(self, episodes, record_points):
+        """Apply Monte Carlo prediction on given policy. Return average returns at certain episodes"""
         state_value_record_ace = []
         state_value_record_no_ace = []
         for i in trange(episodes):
@@ -134,17 +137,20 @@ class Agent:
                 player_point, dealer_show, ace = states[t]
                 if ace == 0:
                     self.state_count_no_ace[player_point, dealer_show] += 1
-                    self.state_values_no_ace[player_point, dealer_show] += returns
+                    self.state_values_no_ace[player_point, dealer_show] += (returns - self.state_values_no_ace[
+                        player_point, dealer_show]) / self.state_count_no_ace[player_point, dealer_show]
                 else:
                     self.state_count_ace[player_point, dealer_show] += 1
-                    self.state_values_ace[player_point, dealer_show] += returns
+                    self.state_values_ace[player_point, dealer_show] += (returns - self.state_values_ace[
+                        player_point, dealer_show]) / self.state_count_ace[player_point, dealer_show]
 
             if i + 1 in record_points:
-                state_value_record_ace.append(self.state_values_ace/self.state_count_ace)
-                state_value_record_no_ace.append(self.state_values_no_ace/self.state_count_no_ace)
+                state_value_record_ace.append(self.state_values_ace)
+                state_value_record_no_ace.append(self.state_values_no_ace)
         return state_value_record_ace, state_value_record_no_ace
 
     def figure_5_1(self):
+        """Generate figure as figure 5.1 in the book"""
         state_value_record_ace, state_value_record_no_ace = self.first_visit_mc_prediction(500000, [10000, 500000])
         states = [state_value_record_ace[0],
                   state_value_record_no_ace[0],
@@ -170,10 +176,100 @@ class Agent:
         plt.savefig('images/figure_5_1.png')
         plt.close()
 
+    def play_game(self, init_action):
+        """Play the game according to current policy. Return states, actions, rewards"""
+        self.start_game()
+        states, actions, rewards = [], [], []
+        first_step = True
+        game_continue = True
+        while game_continue:
+            player_sum = self.card_value(self.player_cards)
+            state = [player_sum - 12, self.dealer_show_card - 1, self.ace_use]
+            if first_step:
+                action = init_action
+                if action == 0:
+                    self.hit()
+                    reward, game_continue = self.burst_check()
+                else:
+                    game_continue = False
+                    reward = self.dealer.dealer_turn(player_sum)
+                first_step = False
+            else:
+                action = self.policy[state[0], state[1], state[2]]
+                if action == 0:
+                    self.hit()
+                    reward, game_continue = self.burst_check()
+                else:
+                    game_continue = False
+                    reward = self.dealer.dealer_turn(player_sum)
+
+            states.append(state)
+            actions.append(action)
+            rewards.append(reward)
+
+        return states, actions, rewards
+
+    def burst_check(self):
+        """Check if player sum is over 21. Return reward and game continue"""
+        if self.card_value(self.player_cards) > 21:
+            return -1, False
+        else:
+            return 0, True
+
+    def monte_carlo_es(self, episodes):
+        """Monte Carlo with Exploring Starts"""
+        self.policy[8:10, :, :] = 1
+        for _ in trange(episodes):
+            states, actions, rewards = self.play_game(np.random.choice(self.actions))
+            returns = 0
+            for t in range(len(states) - 1, -1, -1):
+                returns = self.discount * returns + rewards[t]
+                player_sum, dealer_show, ace = states[t]
+                action = actions[t]
+                self.state_action_count[player_sum, dealer_show, ace, action] += 1
+                self.state_action_values[player_sum, dealer_show, ace, action] += \
+                    (returns - self.state_action_values[player_sum, dealer_show, ace, action]) / \
+                    self.state_action_count[player_sum, dealer_show, ace, action]
+                self.policy[player_sum, dealer_show, ace] = \
+                    np.argmax(self.state_action_values[player_sum, dealer_show, ace, :])
+
+    def figure_5_2(self):
+        self.monte_carlo_es(1000000)
+
+        state_value_no_usable_ace = np.max(self.state_action_values[:, :, 0, :], axis=-1)
+        state_value_usable_ace = np.max(self.state_action_values[:, :, 1, :], axis=-1)
+
+        # get the optimal policy
+        action_no_usable_ace = np.argmax(self.state_action_values[:, :, 0, :], axis=-1)
+        action_usable_ace = np.argmax(self.state_action_values[:, :, 1, :], axis=-1)
+
+        images = [action_usable_ace,
+                  state_value_usable_ace,
+                  action_no_usable_ace,
+                  state_value_no_usable_ace]
+
+        titles = ['Optimal policy with usable Ace',
+                  'Optimal value with usable Ace',
+                  'Optimal policy without usable Ace',
+                  'Optimal value without usable Ace']
+
+        _, axes = plt.subplots(2, 2, figsize=(40, 30))
+        plt.subplots_adjust(wspace=0.1, hspace=0.2)
+        axes = axes.flatten()
+
+        for image, title, axis in zip(images, titles, axes):
+            fig = sns.heatmap(np.flipud(image), cmap="YlGnBu", ax=axis, xticklabels=range(1, 11),
+                              yticklabels=list(reversed(range(12, 22))))
+            fig.set_ylabel('player sum', fontsize=30)
+            fig.set_xlabel('dealer showing', fontsize=30)
+            fig.set_title(title, fontsize=30)
+
+        plt.savefig('images/figure_5_2.png')
+        plt.close()
+
 
 if __name__ == "__main__":
     player = Agent()
-    player.figure_5_1()
+    # player.figure_5_1()
+    player.figure_5_2()
 
-    # print(player.hit_on_less_than_20())
-    # print(player.player_cards, player.dealer.dealer_cards)
