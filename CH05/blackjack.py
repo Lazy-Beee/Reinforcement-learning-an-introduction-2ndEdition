@@ -61,7 +61,10 @@ class Agent:
         self.goal = 21
         # Player sum: 12-21; Dealer show card: 1-10; Usable ace: no, yes; Action: hit, stick
         self.state_action_values = np.zeros((10, 10, 2, 2))
+        self.state_action_values_unweighted = np.zeros((10, 10, 2, 2))
         self.state_action_count = np.zeros((10, 10, 2, 2), dtype=int)
+        self.state_action_count_unweighted = np.zeros((10, 10, 2, 2), dtype=int)
+
         self.policy = np.zeros((10, 10, 2), dtype=int)
 
         self.state_values_ace = np.zeros((10, 10))
@@ -176,7 +179,7 @@ class Agent:
         plt.savefig('images/figure_5_1.png')
         plt.close()
 
-    def play_game(self, init_action):
+    def play_game_es(self, init_action):
         """Play the game according to current policy. Return states, actions, rewards"""
         self.start_game()
         states, actions, rewards = [], [], []
@@ -220,7 +223,7 @@ class Agent:
         """Monte Carlo with Exploring Starts"""
         self.policy[8:10, :, :] = 1
         for _ in trange(episodes):
-            states, actions, rewards = self.play_game(np.random.choice(self.actions))
+            states, actions, rewards = self.play_game_es(np.random.choice(self.actions))
             returns = 0
             for t in range(len(states) - 1, -1, -1):
                 returns = self.discount * returns + rewards[t]
@@ -234,14 +237,12 @@ class Agent:
                     np.argmax(self.state_action_values[player_sum, dealer_show, ace, :])
 
     def figure_5_2(self):
+        """Generate figure as figure 5.2 in the book"""
         self.monte_carlo_es(1000000)
 
         state_value_no_usable_ace = np.max(self.state_action_values[:, :, 0, :], axis=-1)
         state_value_usable_ace = np.max(self.state_action_values[:, :, 1, :], axis=-1)
-
-        # get the optimal policy
-        action_no_usable_ace = np.argmax(self.state_action_values[:, :, 0, :], axis=-1)
-        action_usable_ace = np.argmax(self.state_action_values[:, :, 1, :], axis=-1)
+        _, action_usable_ace, action_no_usable_ace = self.find_optimum_policy()
 
         images = [action_usable_ace,
                   state_value_usable_ace,
@@ -267,9 +268,105 @@ class Agent:
         plt.savefig('images/figure_5_2.png')
         plt.close()
 
+    def play_game_b(self, b):
+        """Play the game with policy b. Return states, actions, rewards"""
+        self.start_game()
+        states, actions, rewards = [], [], []
+        game_continue = True
+        while game_continue:
+            player_sum = self.card_value(self.player_cards)
+            state = [player_sum - 12, self.dealer_show_card - 1, self.ace_use]
+            action = np.random.choice([0, 1], p=b)
+            if action == 0:
+                self.hit()
+                reward, game_continue = self.burst_check()
+            else:
+                game_continue = False
+                reward = self.dealer.dealer_turn(player_sum)
+
+            states.append(state)
+            actions.append(action)
+            rewards.append(reward)
+
+        return states, actions, rewards
+
+    def off_policy(self, episodes, policy_control=True):
+        """Off-policy MC prediction/control with behavior policy of [0.5, 0.5]"""
+        b_policy = [0.5, 0.5]
+        for _ in trange(episodes):
+            states, actions, rewards = self.play_game_b(b_policy)
+            returns = 0
+            weight = 1
+            for t in range(len(states) - 1, -1, -1):
+                returns = self.discount * returns + rewards[t]
+                player_sum, dealer_show, ace = states[t]
+                action = actions[t]
+                # Unweighted rewards
+                self.state_action_count_unweighted[player_sum, dealer_show, ace, action] += 1
+                self.state_action_values_unweighted[player_sum, dealer_show, ace, action] += \
+                    (returns - self.state_action_values_unweighted[player_sum, dealer_show, ace, action]) / \
+                    self.state_action_count_unweighted[player_sum, dealer_show, ace, action]
+                # weighted rewards
+                self.state_action_count[player_sum, dealer_show, ace, action] += weight
+                self.state_action_values[player_sum, dealer_show, ace, action] += \
+                    (returns - self.state_action_values[player_sum, dealer_show, ace, action]) * weight / \
+                    self.state_action_count[player_sum, dealer_show, ace, action]
+
+                if policy_control:
+                    self.policy[player_sum, dealer_show, ace] = \
+                        np.argmax(self.state_action_values[player_sum, dealer_show, ace, :])
+                    if action != self.policy[player_sum, dealer_show, ace]:
+                        break
+                    weight /= b_policy[action]
+                else:
+                    weight *= self.policy[player_sum, dealer_show, ace] / b_policy[action]
+                    if weight == 0:
+                        break
+
+    def find_optimum_policy(self):
+        """Find optimum policy based on state-action values"""
+        action = np.argmax(self.state_action_values[:, :, :, :], axis=-1)
+        action_no_usable_ace = np.argmax(self.state_action_values[:, :, 0, :], axis=-1)
+        action_usable_ace = np.argmax(self.state_action_values[:, :, 1, :], axis=-1)
+
+        return action, action_usable_ace, action_no_usable_ace
+
+    def figure_5_3(self):
+        """Generate figure 5.3"""
+        self.off_policy(1000000)
+
+        state_value_no_usable_ace = np.max(self.state_action_values[:, :, 0, :], axis=-1)
+        state_value_usable_ace = np.max(self.state_action_values[:, :, 1, :], axis=-1)
+        _, action_usable_ace, action_no_usable_ace = self.find_optimum_policy()
+
+        images = [action_usable_ace,
+                  state_value_usable_ace,
+                  action_no_usable_ace,
+                  state_value_no_usable_ace]
+
+        titles = ['Optimal policy with usable Ace',
+                  'Optimal value with usable Ace',
+                  'Optimal policy without usable Ace',
+                  'Optimal value without usable Ace']
+
+        _, axes = plt.subplots(2, 2, figsize=(40, 30))
+        plt.subplots_adjust(wspace=0.1, hspace=0.2)
+        axes = axes.flatten()
+
+        for image, title, axis in zip(images, titles, axes):
+            fig = sns.heatmap(np.flipud(image), cmap="YlGnBu", ax=axis, xticklabels=range(1, 11),
+                              yticklabels=list(reversed(range(12, 22))))
+            fig.set_ylabel('player sum', fontsize=30)
+            fig.set_xlabel('dealer showing', fontsize=30)
+            fig.set_title(title, fontsize=30)
+
+        plt.savefig('images/figure_5_3.png')
+        plt.close()
+
 
 if __name__ == "__main__":
     player = Agent()
     # player.figure_5_1()
-    player.figure_5_2()
+    # player.figure_5_2()
+    player.figure_5_3()
 
