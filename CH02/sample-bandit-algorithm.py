@@ -121,7 +121,7 @@ class SampleMachine:
             plt.plot(steps, bac_percentage)
             plt.xlabel('steps')
             plt.ylabel('optimal action (%)')
-            plt.savefig('image/optimal action vs steps.png')
+            plt.savefig('images/optimal action vs steps.png')
             plt.show()
             plt.close()
 
@@ -129,7 +129,7 @@ class SampleMachine:
             plt.plot(steps, self.record["avg_r"])
             plt.xlabel('steps')
             plt.ylabel('average reward')
-            plt.savefig('image/average reward vs steps.png')
+            plt.savefig('images/average reward vs steps.png')
             plt.show()
             plt.close()
 
