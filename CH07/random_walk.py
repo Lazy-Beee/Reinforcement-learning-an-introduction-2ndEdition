@@ -77,7 +77,7 @@ class RandomWalk:
                     returns = 0
                     for j in range(update_time + 1, min(update_time + step, terminal) + 1):
                         returns += (self.discount ** (j - update_time - 1)) * rewards[j]
-                    if update_time + step <= terminal:
+                    if update_time + step < terminal:
                         returns += (self.discount ** step) * self.state_values[states[update_time + step]]
                     state = states[update_time]
                     if state != self.states[0] and state != self.states[-1]:
@@ -92,13 +92,14 @@ class RandomWalk:
         episode = 10
         repeat = 100
         steps = np.power(2, np.arange(0, 6))
-        time_steps = np.arange(0, 1.01, 0.01)
+        time_steps = np.logspace(-2, 0, num=30)
         errors = np.zeros((len(steps), len(time_steps)))
         plt.figure()
         for i in range(len(steps)):
             step = steps[i]
-            for j, time_step in enumerate(time_steps):
-                print(f'step:{step} time_step:{time_step}')
+            for j in trange(len(time_steps)):
+                time_step = time_steps[j]
+                # print(f'step:{step} time_step:{time_step}')
                 for k in range(repeat):
                     errors[i, j] += self.n_step_td(episode, step, time_step)
                 errors[i, j] /= repeat
