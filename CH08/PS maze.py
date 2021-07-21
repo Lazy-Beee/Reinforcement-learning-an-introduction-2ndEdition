@@ -3,6 +3,7 @@
 import collections
 import numpy as np
 from tqdm import trange
+import matplotlib.pyplot as plt
 
 
 class Maze:
@@ -169,6 +170,7 @@ class Maze:
                 if self.check_path():
                     break
                 self.start()
+            # print(self.total_steps)
         return self.total_steps
 
     def ps_model_learning(self, n):
@@ -190,7 +192,6 @@ class Maze:
 
                 for prev in self.predecessors[tuple(state)]:
                     prev_state = list(prev[0])
-                    prev_state_idx = self.states.index(prev_state)
                     prev_action = prev[1]
                     prev_reward, _, _ = self.state_action_model[prev_state[0], prev_state[1], prev_action]
                     priority = np.abs(prev_reward
@@ -213,8 +214,32 @@ class Maze:
         return dyna_q, ps
 
 
-if __name__ == '__main__':
-    agent = Maze(repeat=10, size=50, n=50)
-    print('Dyna-Q | Prioritized Sweeping')
-    print(agent.output())
+def plot():
+    repeat = 20
+    n = 50
+    sizes = np.power(2, np.arange(1, 6))
+    dq = np.zeros(len(sizes))
+    ps = np.zeros(len(sizes))
+    for i, size in enumerate(sizes):
+        agent = Maze(repeat=repeat, size=size, n=n)
+        dq[i], ps[i] = agent.output()
+    dq = np.log(dq)
+    ps = np.log(ps)
 
+    plt.figure()
+    plt.plot(sizes, dq, label=f"Dyna-Q(n={n})")
+    plt.plot(sizes, ps, label=f"Prioritized(n={n})")
+    plt.title(f'runs={repeat}')
+    plt.xlabel('Grid Size')
+    plt.ylabel('Total Updates (10^)')
+    plt.legend(loc='upper left')
+    plt.savefig('images/maze-DQ-PS')
+    plt.close()
+
+
+if __name__ == '__main__':
+    # agent = Maze(repeat=10, size=10, n=50)
+    # print('Dyna-Q | Prioritized Sweeping')
+    # print(agent.output())
+
+    plot()
