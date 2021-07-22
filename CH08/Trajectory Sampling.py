@@ -46,7 +46,7 @@ class Agent:
         self.discount = 1
         self.eps = 0.1
         self.envi = Environment(self.n_states, self.b, self.max_steps)
-        self.eval_frequency = 100
+        self.eval_frequency = max_steps / 50
 
         self.policy = np.zeros(self.n_states, dtype=int)
         self.state_action_values = np.zeros((self.n_states, self.envi.n_actions))
@@ -106,7 +106,7 @@ class Agent:
             self.state_action_values[state, action] = (1 - self.envi.termination_prob) * \
                 np.average(rewards + self.discount * np.max(self.state_action_values[next_states, :], axis=1))
 
-            if (step + 1) % self.eval_frequency:
+            if (step + 1) % self.eval_frequency == 0:
                 steps.append(step)
                 performance.append(self.evaluate_policy())
         return steps, performance
@@ -127,7 +127,7 @@ class Agent:
             self.state_action_values[state, action] = (1 - self.envi.termination_prob) * \
                 np.average(rewards + self.discount * np.max(self.state_action_values[next_states, :], axis=1))
 
-            if (step + 1) % self.eval_frequency:
+            if (step + 1) % self.eval_frequency == 0:
                 steps.append(step)
                 performance.append(self.evaluate_policy())
 
@@ -135,16 +135,15 @@ class Agent:
 
 
 def figure():
-    num_states = [200, 500]
+    num_states = [100, 200]
     times = 20
     branch = [1, 10]
-    repeat = 5
-
+    repeat = 100
     start_time = time.time()
 
-    plt.figure(figsize=(10, 20))
+    plt.figure(figsize=(10, 10 * len(num_states)))
     for i, n in enumerate(num_states):
-        plt.subplot(2, 1, i + 1)
+        plt.subplot(len(num_states), 1, i + 1)
         for b in branch:
             s = None
             value_u, value_op = [], []
@@ -159,13 +158,12 @@ def figure():
             plt.plot(s, value_u, label=f'b = {b}, uniform')
             plt.plot(s, value_op, label=f'b = {b}, on-policy')
         plt.title(f'{n} states')
-
         plt.ylabel('value of start state')
         plt.legend()
 
-    plt.subplot(2, 1, 2)
+    plt.subplot(len(num_states), 1, len(num_states))
     plt.xlabel('computation time, in expected updates')
-    plt.suptitle(f'n = {repeat}, run time = {time.time()-start_time}')
+    plt.suptitle(f'n = {repeat}, run time = {int(time.time()-start_time)} s')
     plt.savefig('images/figure_8_8.png')
     plt.close()
 
