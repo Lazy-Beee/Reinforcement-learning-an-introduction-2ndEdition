@@ -8,13 +8,14 @@ from tqdm import trange, tqdm
 
 
 class CoarseCoding:
-    def __init__(self):
+    def __init__(self, rbf=False):
+        self.rbf = rbf
         self.interval = 2
         self.n_features = 50
         self.high = 1
         self.low = 0
         self.step_size = 0.2
-
+        self.std_dev = 0.1
         self.weights = np.zeros(self.n_features)
 
         self.left_bound = 0
@@ -59,6 +60,10 @@ class CoarseCoding:
             self.features.append([left, left + self.feature_width])
         self.features.append([(self.n_features - 1) * self.feature_step, self.right_bound])
 
+        if self.rbf:
+            for i in range(self.n_features):
+                self.features[i].append((self.features[i][0] + self.features[i][1]) / 2)
+
     def get_active_features(self):
         left_bounds = [self.features[i][0] for i in range(self.n_features)]
         right_bounds = [self.features[i][1] for i in range(self.n_features)]
@@ -73,12 +78,26 @@ class CoarseCoding:
         if x is not None:
             self.pos = x
             self.get_active_features()
-        return np.sum(self.weights[self.active_features])
+
+        if self.rbf:
+            value = 0
+            for i in range(self.n_features):
+                value += np.exp(- np.power(self.pos - self.features[i][2], 2) / (2 * np.power(self.std_dev, 2)))
+            return value
+        else:
+            return np.sum(self.weights[self.active_features])
 
     def update_func_values(self, change):
         change /= len(self.active_features)
-        for i in self.active_features:
-            self.weights[i] += change
+
+        if self.rbf:
+            for i in range(self.n_features):
+                change *= np.exp(- np.power(self.pos - self.features[i][2], 2) / (2 * np.power(self.std_dev, 2)))
+                change *= - (self.pos - self.features[i][2]) / np.power(self.std_dev, 2)
+                self.weights[i] += change
+        else:
+            for i in self.active_features:
+                self.weights[i] += change
 
     def approximate(self, feature_width, n):
         self.reset()
@@ -121,10 +140,13 @@ class CoarseCoding:
             plt.legend(loc='lower center')
 
         plt.suptitle(f'run time = {int(time.time() - start_time)} s')
-        plt.savefig('images/figure_9_8.png')
+        if self.rbf:
+            plt.savefig('images/figure_9_8_RBF.png')
+        else:
+            plt.savefig('images/figure_9_8.png')
         plt.close()
 
 
 if __name__ == '__main__':
-    a = CoarseCoding()
+    a = CoarseCoding(rbf=True)
     a.figure_9_8()
