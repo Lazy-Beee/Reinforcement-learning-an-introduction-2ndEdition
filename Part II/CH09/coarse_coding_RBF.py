@@ -58,13 +58,12 @@ class CoarseCoding:
         for i in range(self.n_features):
             value += np.exp(- np.power(self.pos - self.features[i], 2) / (2 * np.power(self.std_dev, 2))) \
                      * self.weights[i]
-        print(value)
         return value
 
     def update_func_values(self, change):
         for i in range(self.n_features):
-            change *= np.exp(- np.power(self.pos - self.features[i], 2) / (2 * np.power(self.std_dev, 2)))
-            self.weights[i] += change
+            change_ = change * np.exp(- np.power(self.pos - self.features[i], 2) / (2 * np.power(self.std_dev, 2)))
+            self.weights[i] += change_
 
     def approximate(self, n):
         self.reset()
@@ -79,15 +78,15 @@ class CoarseCoding:
         start_time = time.time()
 
         repeat = 10
-        num_of_samples = [10, 40, 160, 640, 2560]
-        feature_widths = [0.2, 0.4, 1.0]
+        num_of_samples = [40, 160, 640, 2560, 10240, 40960]
+        feature_widths = [0.05, 0.2, 0.4]
         plt.figure(figsize=(20, 10))
         for index, num_of_sample in enumerate(num_of_samples):
             plt.subplot(2, 3, index + 1)
             plt.title('%d samples' % num_of_sample)
             for feature_width in tqdm(feature_widths):
                 self.init_coarse()
-                self.std_dev = feature_width
+                self.std_dev = feature_width / 2
                 axis_x = np.arange(self.left_bound, self.right_bound, 0.01)
                 values = np.zeros(axis_x.shape)
                 for _ in range(repeat):
