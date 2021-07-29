@@ -1,4 +1,4 @@
-"""Figure 9.8"""
+"""Figure 9.8, RBF not in function"""
 import bisect
 
 import numpy as np
@@ -81,7 +81,7 @@ class CoarseCoding:
 
         if self.rbf:
             value = 0
-            for i in range(self.n_features):
+            for i in self.active_features:
                 value += np.exp(- np.power(self.pos - self.features[i][2], 2) / (2 * np.power(self.std_dev, 2)))
             return value
         else:
@@ -91,9 +91,9 @@ class CoarseCoding:
         change /= len(self.active_features)
 
         if self.rbf:
-            for i in range(self.n_features):
+            for i in self.active_features:
                 change *= np.exp(- np.power(self.pos - self.features[i][2], 2) / (2 * np.power(self.std_dev, 2)))
-                change *= - (self.pos - self.features[i][2]) / np.power(self.std_dev, 2)
+                # change *= - (self.pos - self.features[i][2]) / np.power(self.std_dev, 2)
                 self.weights[i] += change
         else:
             for i in self.active_features:
@@ -121,6 +121,7 @@ class CoarseCoding:
             plt.title('%d samples' % num_of_sample)
             for feature_width in tqdm(feature_widths):
                 self.init_coarse(feature_width)
+                self.std_dev = feature_width / 5
                 axis_x = np.arange(self.left_bound, self.right_bound, 0.01)
                 values = np.zeros(axis_x.shape)
                 for _ in range(repeat):
@@ -136,7 +137,7 @@ class CoarseCoding:
                 else:
                     true_y.append(0)
             plt.plot(axis_x, true_y, '--', label='true value')
-            plt.ylim(-0.4, 1.4)
+            # plt.ylim(-0.4, 1.4)
             plt.legend(loc='lower center')
 
         plt.suptitle(f'run time = {int(time.time() - start_time)} s')
@@ -148,5 +149,5 @@ class CoarseCoding:
 
 
 if __name__ == '__main__':
-    a = CoarseCoding(rbf=True)
+    a = CoarseCoding()
     a.figure_9_8()
