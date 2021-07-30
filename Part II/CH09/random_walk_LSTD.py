@@ -13,8 +13,8 @@ class RandomWalk:
         """Define parameters of the class"""
         self.n_states = 1000
         self.n_groups = 10
-        self.sampling_rate = 1
         self.max_episodes = max_episodes
+        self.sampling_rate = self.max_episodes / 100
         self.group_size = self.n_states // self.n_groups
 
         self.states = np.arange(0, self.n_states)
@@ -107,7 +107,7 @@ class RandomWalk:
         errors = []
         times = []
         time_1 = time.time()
-        for i in range(self.max_episodes):
+        for i in trange(self.max_episodes):
             states, rewards, _ = self.walk()
             states.reverse()
             rewards.reverse()
@@ -127,7 +127,7 @@ class RandomWalk:
         errors = []
         times = []
         time_1 = time.time()
-        for i in range(self.max_episodes):
+        for i in trange(self.max_episodes):
             states, rewards, _ = self.walk()
             for j, state in enumerate(states):
                 group_idx_curr = int(state // self.group_size)
@@ -152,7 +152,7 @@ class RandomWalk:
         a_mat_inv = np.dot(np.power(self.small_threshold, -1), np.identity(self.n_groups))
         b_vec = np.zeros((self.n_groups, 1))
         time_1 = time.time()
-        for i in range(self.max_episodes):
+        for i in trange(self.max_episodes):
             self.start_episode()
             while not self.reached_terminal:
                 x = self.one_hot(self.state)
@@ -176,22 +176,22 @@ class RandomWalk:
         start_time = time.time()
         # self.compute_true_values()
 
-        n_data_point = self.max_episodes // self.sampling_rate
-        x_val = np.arange(1, n_data_point + 1) * 100
+        n_data_point = int(self.max_episodes // self.sampling_rate)
+        x_val = np.arange(1, n_data_point + 1) * self.sampling_rate
         errors_mc, errors_sg, errors_ls = np.zeros(n_data_point), np.zeros(n_data_point), np.zeros(n_data_point)
         times_mc, times_sg, times_ls = np.zeros(n_data_point), np.zeros(n_data_point), np.zeros(n_data_point)
 
-        repeat = 100
-        for _ in trange(repeat):
-            a, b = self.least_square_td()
-            errors_ls += a
-            times_ls += b
+        repeat = 1
+        for _ in range(repeat):
             a, b = self.gradient_mc()
             errors_mc += a
             times_mc += b
             a, b = self.semi_gradient_td()
             errors_sg += a
             times_sg += b
+            a, b = self.least_square_td()
+            errors_ls += a
+            times_ls += b
 
         errors_mc /= repeat
         errors_sg /= repeat
@@ -218,11 +218,11 @@ class RandomWalk:
         plt.legend()
 
         plt.suptitle(f'run time = {int(time.time() - start_time)} s')
-        plt.savefig('images/figure_LSTD_2.png')
+        plt.savefig(f'images/figure_LSTD_{self.max_episodes}.png')
         plt.close()
 
 
 if __name__ == '__main__':
-    k = RandomWalk(100)
+    k = RandomWalk(1000000)
     k.figure()
 
