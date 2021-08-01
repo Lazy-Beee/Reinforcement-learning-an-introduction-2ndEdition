@@ -3,7 +3,6 @@
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 from TileCodingSoftware import *
 from tqdm import trange
 
@@ -103,6 +102,7 @@ class MountainCar:
             return np.sum(self.weight[active_tiles])
 
     def traverse_all_state_values(self):
+        """Go through state-action space"""
         positions = np.linspace(self.pos_bound[0], self.pos_bound[1], self.grid_size)
         velocities = np.linspace(self.vel_bound[0], self.vel_bound[1], self.grid_size)
         values = np.zeros((self.grid_size, self.grid_size))
@@ -115,7 +115,7 @@ class MountainCar:
         return - values
 
     def episodic_semi_gradient_sarsa(self, record_points=None):
-        """Apply Episodic Semi_gradient Sarsa"""
+        """Apply Episodic Semi-gradient Sarsa"""
         self.reset()
         value_record = []
         episode_length = []
@@ -135,6 +135,57 @@ class MountainCar:
                 active_tiles = self.get_active_tiles(pos, vel, action)
                 self.weight[active_tiles] += change
                 count += 1
+            episode_length.append(count)
+            if record_points is not None and (i + 1) in record_points:
+                value_record.append(self.traverse_all_state_values())
+        return value_record, episode_length
+
+    def n_step_sarsa(self, n, record_points=None):
+        """Apply Episodic Semi-gradient n-step Sarsa"""
+        self.reset()
+        value_record = []
+        episode_length = []
+        for i in range(self.max_episodes):
+            count = 0
+            self.start_new_episode()
+            terminal = float('inf')
+            t, update_t = 0, 0
+            div = n + 1
+            state_pos = [self.pos] * div
+            state_vel = [self.vel] * div
+            actions = [0] * (n + 1)
+            rewards = [0] * (n + 1)
+            while True:
+                if t < terminal:
+                    count += 1
+                    actions[t % div] = self.eps_greedy()
+                    new_pos, new_vel, reward = self.move_one_time_step()
+                    state_pos[(t + 1) % div] = new_pos
+                    state_vel[(t + 1) % div] = new_vel
+                    rewards[(t + 1) % div] = reward
+                    if self.reached_terminal:
+                        terminal = t + 1
+                update_t = t - n + 1
+                if update_t >= 0:
+                    returns = 0
+                    for j in range(update_t + 1, min(update_t + n, terminal) + 1):
+                        returns += (self.discount ** (j - update_t - 1)) * rewards[j % div]
+                    if update_t + n < terminal:
+                        value_n = self.get_state_action_value(state_pos[(update_t + n) % div],
+                                                              state_vel[(update_t + n) % div],
+                                                              actions[(update_t + n) % div])
+                        returns += (self.discount ** n) * value_n
+
+                    pos, vel, action = state_pos[update_t % div], state_vel[update_t % div], actions[update_t % div]
+                    if pos != self.terminal:
+                        value = self.get_state_action_value(pos, vel, action)
+                        value_diff = 1
+                        change = self.step_size * (returns - value) * value_diff
+                        active_tiles = self.get_active_tiles(pos, vel, action)
+                        self.weight[active_tiles] += change
+                t += 1
+                if update_t == terminal - 1:
+                    break
             episode_length.append(count)
             if record_points is not None and (i + 1) in record_points:
                 value_record.append(self.traverse_all_state_values())
@@ -188,10 +239,64 @@ class MountainCar:
         plt.savefig(f'images/figure 10.2.png')
         plt.close()
 
+    def figure_10_3(self):
+        start_time = time.time()
+        self.max_episodes = 500
+        repeat = 100
+        step_sizes = [0.3, 0.5]
+        steps = [1, 8]
+        step_number = np.zeros((len(step_sizes), self.max_episodes))
+        for _ in trange(repeat):
+            for i, step_size in enumerate(step_sizes):
+                self.step_size = step_size / self.n_tilings
+                step = steps[i]
+                _, episode_length = self.n_step_sarsa(step)
+                step_number[i, :] += episode_length
+        step_number /= repeat
+        plt.figure()
+        for i in range(len(step_sizes)):
+            plt.plot(step_number[i, :], label=f'n = {steps[i]} Step Size = {step_sizes[i]}/{self.n_tilings}')
+        plt.xlabel('Episodes')
+        plt.ylabel('Steps Per Episode')
+        plt.ylim(100, 1000)
+        plt.yscale('log')
+        plt.legend()
+
+        plt.suptitle(f'run time = {int(time.time() - start_time)} s')
+        plt.savefig(f'images/figure 10.3.png')
+        plt.close()
+
+    def figure_10_4(self):
+        start_time = time.time()
+        self.max_episodes = 5
+        repeat = 1
+        steps = np.power(2, np.arange(0, 5))
+        time_steps = np.linspace(0.2, 1.8, 10)
+        runs = np.zeros((len(steps), len(time_steps)))
+        plt.figure()
+        for _ in range(repeat):
+            for i in range(len(steps)):
+                step = steps[i]
+                for j in trange(len(time_steps)):
+                    self.step_size = time_steps[j] / self.n_tilings
+                    runs[i, j] += np.mean(self.n_step_sarsa(step)[1])
+        runs /= repeat
+
+        for i, step in enumerate(steps):
+            plt.plot(time_steps, runs[i, :], label='n=' + str(step))
+
+        plt.xlabel('Step size * 8 (number of tilings)')
+        plt.ylabel('Average steps over first 50 episodes')
+        plt.title(f'run time = {int(time.time() - start_time)} s')
+        plt.legend()
+
+        plt.savefig('images/figure 10.4.png')
+        plt.close()
+
 
 if __name__ == "__main__":
     o = MountainCar()
-    o.figure_10_2()
+    o.figure_10_4()
 
 
 
