@@ -56,6 +56,7 @@ class MountainCar:
     def reset(self):
         """Reset/Set class parameters"""
         self.weight = np.zeros(self.max_size)
+        self.iht = IHT(self.max_size)
 
     def start_new_episode(self):
         """Set class ready for a new episode"""
@@ -153,8 +154,8 @@ class MountainCar:
             div = n + 1
             state_pos = [self.pos] * div
             state_vel = [self.vel] * div
-            actions = [0] * (n + 1)
-            rewards = [0] * (n + 1)
+            actions = [0] * div
+            rewards = [0] * div
             while True:
                 if t < terminal:
                     count += 1
@@ -241,10 +242,10 @@ class MountainCar:
 
     def figure_10_3(self):
         start_time = time.time()
-        self.max_episodes = 500
-        repeat = 100
-        step_sizes = [0.3, 0.5]
-        steps = [1, 8]
+        self.max_episodes = 300
+        repeat = 10
+        step_sizes = [0.5, 0.2, 0.05]
+        steps = [1, 8, 8]
         step_number = np.zeros((len(step_sizes), self.max_episodes))
         for _ in trange(repeat):
             for i, step_size in enumerate(step_sizes):
@@ -268,25 +269,26 @@ class MountainCar:
 
     def figure_10_4(self):
         start_time = time.time()
-        self.max_episodes = 5
-        repeat = 1
-        steps = np.power(2, np.arange(0, 5))
-        time_steps = np.linspace(0.2, 1.8, 10)
+        self.max_episodes = 50
+        repeat = 20
+        steps = np.power(2, np.arange(0, 4))
+        time_steps = np.linspace(0.05, 1, 30)
         runs = np.zeros((len(steps), len(time_steps)))
         plt.figure()
-        for _ in range(repeat):
+        for _ in trange(repeat):
             for i in range(len(steps)):
                 step = steps[i]
-                for j in trange(len(time_steps)):
+                for j in range(len(time_steps)):
                     self.step_size = time_steps[j] / self.n_tilings
-                    runs[i, j] += np.mean(self.n_step_sarsa(step)[1])
+                    runs[i, j] += self.n_step_sarsa(step)[1][-1]
         runs /= repeat
 
         for i, step in enumerate(steps):
             plt.plot(time_steps, runs[i, :], label='n=' + str(step))
 
         plt.xlabel('Step size * 8 (number of tilings)')
-        plt.ylabel('Average steps over first 50 episodes')
+        plt.ylabel('Average steps over 50th episodes')
+        plt.ylim(100, 400)
         plt.title(f'run time = {int(time.time() - start_time)} s')
         plt.legend()
 
