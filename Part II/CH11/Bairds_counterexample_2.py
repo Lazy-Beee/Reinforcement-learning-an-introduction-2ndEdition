@@ -143,6 +143,30 @@ class Baird:
             self.mean_square_ve()
             self.mean_square_pbe()
 
+    def one_step_emphatic_td_expected(self):
+        self.reset()
+        prev_m = 0
+        update_weight = 1 / self.n_states
+        for _ in trange(self.max_steps):
+            expected_m = 0
+            change = np.zeros(self.n_weights)
+            for state in self.states:
+                value, next_value = self.get_state_values(state), self.get_state_values(self.states[-1])
+                delta = 0 + self.discount * next_value - value
+                rho = 1 / (1 / self.n_states)
+                if state == self.states[-1]:
+                    prev_rho = 1 / (1 / self.n_states)
+                else:
+                    prev_rho = 0
+                m = self.discount * prev_rho * prev_m + 1
+                expected_m += m
+                change += self.step_size_a * m * rho * delta * self.feature[state, :]
+            prev_m = expected_m / self.n_states
+            self.weight += change * update_weight / self.n_states
+            self.weight_record.append(self.weight.copy())
+            self.mean_square_ve()
+            self.mean_square_pbe()
+
     def figure_11_2(self):
         start_time = time.time()
         self.max_steps = 1000
@@ -204,7 +228,30 @@ class Baird:
         plt.savefig(f'images/figure 11.5.png')
         plt.close()
 
+    def figure_11_6(self):
+        start_time = time.time()
+        self.max_steps = 1000
+        self.step_size_a = 0.01
+
+        plt.figure(figsize=(10, 8))
+        self.one_step_emphatic_td_expected()
+        record = np.asarray(self.weight_record)
+        for j in range(6):
+            plt.plot(record[:, j], '--', label=f'w{j + 1}')
+        for j in range(6, 8):
+            plt.plot(record[:, j], label=f'w{j + 1}')
+        plt.plot(self.ve_record, label='msVE')
+        plt.plot(self.pbe_record, label='msPBE')
+        plt.xlabel('Steps')
+        plt.ylabel('Weight')
+        plt.title('Gradient correction TD (TDC)')
+        plt.legend(loc='upper right')
+
+        plt.suptitle(f'run time = {int(time.time() - start_time)} s')
+        plt.savefig(f'images/figure 11.6.png')
+        plt.close()
+
 
 if __name__ == "__main__":
     a = Baird()
-    a.figure_11_5()
+    a.figure_11_6()
