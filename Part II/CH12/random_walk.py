@@ -98,26 +98,26 @@ class RandomWalk:
                 time_ += 1
         return self.rms_error()
 
-    def n_step_return(self, states, rewards, t, n):
+    def n_step_return(self, states, t, n, rewards=None):
         """Return n-step return"""
-        # g = 0
-        # for i in range(n):
-        #     idx = t + i + 1
-        #     g += rewards[idx] * np.power(self.discount, i)
-        # g += self.state_values[states[t + n]] * np.power(self.discount, n)
-        # return g
+        if rewards is None:
+            return self.state_values[states[t + n]]
+        g = 0
+        for i in range(n):
+            idx = t + i + 1
+            g += rewards[idx] * np.power(self.discount, i)
+        g += self.state_values[states[t + n]] * np.power(self.discount, n)
+        return g
 
-        return self.state_values[states[t+n]]
-
-    def complete_return(self, rewards, t, terminal):
+    def complete_return(self, rewards, t=None, terminal=None):
         """Return complete return"""
-        # g = 0
-        # for i in range(terminal - t):
-        #     idx = t + i + 1
-        #     g += rewards[idx] * np.power(self.discount, i)
-        # return g
-
-        return rewards[-1]
+        if t is None and terminal is None:
+            return rewards[-1]
+        g = 0
+        for i in range(terminal - t):
+            idx = t + i + 1
+            g += rewards[idx] * np.power(self.discount, i)
+        return g
 
     def lambda_return(self, states, rewards, t, terminal, lamb):
         """Return lambda-return"""
@@ -125,8 +125,8 @@ class RandomWalk:
         for n in range(1, terminal - t):
             if np.power(lamb, n - 1) < self.small_threshold:
                 return lamb_return
-            lamb_return += (1 - lamb) * np.power(lamb, n - 1) * self.n_step_return(states, rewards, t, n)
-        lamb_return += np.power(lamb, terminal - t - 1) * self.complete_return(rewards, t, terminal)
+            lamb_return += (1 - lamb) * np.power(lamb, n - 1) * self.n_step_return(states, t, n)
+        lamb_return += np.power(lamb, terminal - t - 1) * self.complete_return(rewards)
         return lamb_return
 
     def offline_lambda_return(self, episode, lamb, step_size):
