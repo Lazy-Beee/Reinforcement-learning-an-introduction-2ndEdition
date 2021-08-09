@@ -27,6 +27,10 @@ class RandomWalk:
         self.action = 0
         self.small_threshold = 1e-3
 
+        self.features = np.zeros((self.number_of_states + 2, self.number_of_states + 2))
+        for i in range(self.number_of_states):
+            self.features[i+1, i+1] = 1
+
     def reset(self):
         """Reset class parameters"""
         self.state_values = np.zeros(self.number_of_states + 2)
@@ -98,10 +102,14 @@ class RandomWalk:
                 time_ += 1
         return self.rms_error()
 
-    def n_step_return(self, states, t, n, rewards=None):
-        """Return n-step return"""
-        if rewards is None:
-            return self.state_values[states[t + n]]
+    def n_step_return(self, states, t, n, rewards=None, non_discount=True):
+        """Return n-step return(non-discount/discount)"""
+        if non_discount:
+            if rewards is None:
+                return self.state_values[states[t+n]]
+            else:
+                # Include rewards only if h can be terminal (in case of random walk).
+                return self.state_values[states[t+n]] + np.sum(rewards[t+1:t+n+1])
         g = 0
         for i in range(n):
             idx = t + i + 1
@@ -127,6 +135,16 @@ class RandomWalk:
                 return lamb_return
             lamb_return += (1 - lamb) * np.power(lamb, n - 1) * self.n_step_return(states, t, n)
         lamb_return += np.power(lamb, terminal - t - 1) * self.complete_return(rewards)
+        return lamb_return
+
+    def h_lambda_return(self, states, rewards, t, h, lamb):
+        """Return truncated-lambda-return"""
+        lamb_return = 0
+        for n in range(1, h - t):
+            if np.power(lamb, n - 1) < self.small_threshold:
+                return lamb_return
+            lamb_return += (1 - lamb) * np.power(lamb, n - 1) * self.n_step_return(states, t, n)
+        lamb_return += np.power(lamb, h - t - 1) * self.n_step_return(states, t, h-t, rewards)
         return lamb_return
 
     def offline_lambda_return(self, episode, lamb, step_size):
@@ -155,6 +173,48 @@ class RandomWalk:
                 trace[state] += 1
                 delta = reward + self.discount * self.state_values[next_state] - self.state_values[state]
                 self.state_values += step_size * delta * trace
+
+        return self.rms_error()
+
+    def online_td_lambda(self, episode, lamb, step_size):
+        self.reset()
+        for _ in range(episode):
+            self.start_episode()
+            states = [self.state]
+            rewards = [0]
+            h = 0
+            while not self.reached_terminal:
+                h += 1
+                rewards.append(self.step())
+                states.append(self.state)
+                for t in range(h):
+                    state = states[t]
+                    change = step_size * (self.h_lambda_return(states, rewards, t, h, lamb) - self.state_values[state])
+                    self.state_values[state] += change
+
+        return self.rms_error()
+
+    def true_online_td_lambda(self, episode, lamb, step_size):
+        self.reset()
+        for _ in range(episode):
+            self.start_episode()
+            trace = np.zeros(self.number_of_states + 2)
+            value_old = 0
+            while True:
+                feature = self.features[self.state]
+                reward = self.step()
+                feature_next = self.features[self.state]
+                value = np.dot(self.state_values, feature)
+                value_next = np.dot(self.state_values, feature_next)
+
+                delta = reward + self.discount * value_next - value
+                trace *= self.discount * lamb
+                trace += (1 - step_size * self.discount * lamb * np.dot(trace, feature)) * feature
+                self.state_values += step_size * ((delta + value - value_old) * trace
+                                                  - (value - value_old) * feature)
+                value_old = value_next
+                if sum(feature_next) == 0:
+                    break
 
         return self.rms_error()
 
@@ -233,7 +293,99 @@ class RandomWalk:
         plt.savefig('images/figure 12.6.png')
         plt.close()
 
+    def figure_12_8(self):
+        """Plot the rms error of value prediction"""
+        start_time = time.time()
+        episode = 10
+        repeat = 10
+        lambs = [0, 0.4, 0.8, 0.9, 0.95]
+        time_steps = np.linspace(0, 1, num=20)
+        errors = np.zeros((len(lambs), len(time_steps)))
+        plt.figure(figsize=(20, 8))
+
+        plt.subplot(1, 2, 1)
+        for i in range(len(lambs)):
+            lamb = lambs[i]
+            time_r = time.time()
+            for j in trange(len(time_steps)):
+                time_step = time_steps[j]
+                for k in range(repeat):
+                    errors[i, j] += self.online_td_lambda(episode, lamb, time_step)
+                errors[i, j] /= repeat
+            plt.plot(time_steps, errors[i, :], label=f'\u03BB={lamb}, t={int(time.time() - time_r)}s')
+        plt.xlabel('Step Size')
+        plt.ylabel('RMS Error')
+        plt.title(f'On-line \u03BB-return algorithm ({repeat*len(lambs)*len(time_steps)} runs)')
+        plt.ylim([0.1, 0.6])
+        plt.legend(loc='upper right')
+
+        plt.subplot(1, 2, 2)
+        for i in range(len(lambs)):
+            lamb = lambs[i]
+            time_r = time.time()
+            for j in trange(len(time_steps)):
+                time_step = time_steps[j]
+                for k in range(repeat):
+                    errors[i, j] += self.semi_gradient_td_lambda(episode, lamb, time_step)
+                errors[i, j] /= repeat
+            plt.plot(time_steps, errors[i, :], label=f'\u03BB={lamb}, t={int(time.time() - time_r)}s')
+        plt.xlabel('Step Size')
+        plt.ylabel('RMS Error')
+        plt.title(f'Off-line \u03BB-return algorithm ({repeat*len(lambs)*len(time_steps)} runs)')
+        plt.ylim([0.1, 0.6])
+        plt.legend(loc='upper right')
+
+        plt.suptitle(f'TD(\u03BB) t = {int(time.time() - start_time)}s')
+        plt.savefig('images/figure 12.8.png')
+        plt.close()
+
+    def figure_12_8_2(self):
+        """Plot the rms error of value prediction"""
+        start_time = time.time()
+        episode = 10
+        repeat = 1000
+        lambs = [0, 0.4, 0.8, 0.9, 0.95]
+        time_steps = np.linspace(0, 1, num=30)
+        errors = np.zeros((len(lambs), len(time_steps)))
+        plt.figure(figsize=(20, 8))
+
+        plt.subplot(1, 2, 1)
+        for i in range(len(lambs)):
+            lamb = lambs[i]
+            time_r = time.time()
+            for j in trange(len(time_steps)):
+                time_step = time_steps[j]
+                for k in range(repeat):
+                    errors[i, j] += self.true_online_td_lambda(episode, lamb, time_step)
+                errors[i, j] /= repeat
+            plt.plot(time_steps, errors[i, :], label=f'\u03BB={lamb}, t={int(time.time() - time_r)}s')
+        plt.xlabel('Step Size')
+        plt.ylabel('RMS Error')
+        plt.title(f'True on-line TD(\u03BB) ({repeat*len(lambs)*len(time_steps)} runs)')
+        plt.ylim([0.1, 0.6])
+        plt.legend(loc='upper right')
+
+        plt.subplot(1, 2, 2)
+        for i in range(len(lambs)):
+            lamb = lambs[i]
+            time_r = time.time()
+            for j in trange(len(time_steps)):
+                time_step = time_steps[j]
+                for k in range(repeat):
+                    errors[i, j] += self.semi_gradient_td_lambda(episode, lamb, time_step)
+                errors[i, j] /= repeat
+            plt.plot(time_steps, errors[i, :], label=f'\u03BB={lamb}, t={int(time.time() - time_r)}s')
+        plt.xlabel('Step Size')
+        plt.ylabel('RMS Error')
+        plt.title(f'Off-line \u03BB-return algorithm ({repeat*len(lambs)*len(time_steps)} runs)')
+        plt.ylim([0.1, 0.6])
+        plt.legend(loc='upper right')
+
+        plt.suptitle(f'TD(\u03BB) t = {int(time.time() - start_time)}s')
+        plt.savefig('images/figure 12.8.2.png')
+        plt.close()
+
 
 if __name__ == '__main__':
     system = RandomWalk()
-    system.figure_12_6()
+    system.figure_12_8_2()
