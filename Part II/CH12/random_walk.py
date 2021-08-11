@@ -290,7 +290,7 @@ class RandomWalk:
         plt.legend(loc='upper right')
 
         plt.title(f'TD(\u03BB) t = {int(time.time() - start_time)}s')
-        plt.savefig('images/figure 12.6.png')
+        plt.savefig('images/figure 13.1.png')
         plt.close()
 
     def figure_12_8(self):

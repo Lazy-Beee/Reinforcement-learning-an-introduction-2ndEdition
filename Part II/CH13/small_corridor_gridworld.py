@@ -58,6 +58,27 @@ class GridWorld:
         return total_reward
 
 
+def example_13_1():
+    start_time = time.time()
+    n_points = 1000
+    repeat = 1000
+    right_prob = np.linspace(0.01, 0.99, n_points)
+    env = GridWorld()
+    data = np.zeros(n_points)
+    for _ in trange(repeat):
+        for i, prob in enumerate(right_prob):
+            data[i] += env.full_episode([1-prob, prob])
+    data /= repeat
+    plt.figure(figsize=(10, 8))
+    plt.plot(right_prob, data)
+    plt.xlabel('Probability of moving right')
+    plt.ylabel('Value')
+    plt.ylim(-100, 0)
+    plt.title(f'repeat = {repeat} t = {int(time.time() - start_time)}s')
+    plt.savefig('images/example 13.1.png')
+    plt.close()
+
+
 class MCPolicyGradientControl:
     def __init__(self, step_size, environment=GridWorld()):
         """Monte-Carlo Policy-Gradient Control (episodic)."""
@@ -70,6 +91,10 @@ class MCPolicyGradientControl:
 
         # records
         self.theta = [0, 0]
+
+    def reset(self):
+        """Reset class"""
+        self.theta = [-1.47, 1.47]
 
     def feature_vector(self, state=None, action=None):
         """Return feature vector of state-action pair."""
@@ -126,34 +151,13 @@ class MCPolicyGradientControl:
 
     def policy_gradient_control(self, episode):
         """Optimize policy"""
-        self.theta = [-1.47, 1.47]
+        self.reset()
         rewards_record = []
         for _ in range(episode):
             states, actions, rewards = self.full_episode()
             self.learn(states, actions, rewards)
             rewards_record.append(np.sum(rewards))
         return rewards_record
-
-
-def example_13_1():
-    start_time = time.time()
-    n_points = 1000
-    repeat = 1000
-    right_prob = np.linspace(0.01, 0.99, n_points)
-    env = GridWorld()
-    data = np.zeros(n_points)
-    for _ in trange(repeat):
-        for i, prob in enumerate(right_prob):
-            data[i] += env.full_episode([1-prob, prob])
-    data /= repeat
-    plt.figure(figsize=(10, 8))
-    plt.plot(right_prob, data)
-    plt.xlabel('Probability of moving right')
-    plt.ylabel('Value')
-    plt.ylim(-100, 0)
-    plt.title(f'repeat = {repeat} t = {int(time.time() - start_time)}s')
-    plt.savefig('images/example 13.1.png')
-    plt.close()
 
 
 def figure_13_1():
@@ -178,13 +182,71 @@ def figure_13_1():
     plt.legend(loc='lower right')
 
     plt.title(f'repeat = {repeat} t = {int(time.time() - start_time)}s')
-    plt.savefig('images/figure 12.6.png')
+    plt.savefig('images/figure 13.1.png')
+    plt.close()
+
+
+class ReinforceBaseline(MCPolicyGradientControl):
+    """REINFORCE with Baseline"""
+    def __init__(self, step_size_theta, step_size_weight, environment=GridWorld()):
+        """Monte-Carlo Policy-Gradient Control (episodic)."""
+        super(ReinforceBaseline, self).__init__(step_size_theta, environment)
+        # Settings
+        self.step_size_weight = step_size_weight
+
+        # records
+        self.weight = np.zeros(self.env.world_size)
+
+    def reset(self):
+        """Reset class"""
+        self.theta = [-1.47, 1.47]
+        self.weight = np.zeros(self.env.world_size)
+
+    def learn(self, states, actions, rewards):
+        """Update policy using one full episode"""
+        terminal = len(states)
+        for t in range(terminal):
+            state, action = states[t], actions[t]
+            g = 0
+            for k in range(t+1, terminal+1):
+                g += np.power(self.discount, k-t-1) * rewards[k]
+            delta = g - self.weight[state]
+            self.weight += self.step_size_weight * delta * 1
+            gradient_ln_policy = self.feature_vector(state, action) - np.dot(self.feature, self.policy_prob(state))
+            self.theta += self.step_size * np.power(self.discount, t) * delta * gradient_ln_policy
+
+
+def figure_13_2():
+    """Plot figure 13.1"""
+    start_time = time.time()
+    episode = 1000
+    repeat = 1000
+    data = np.zeros((2, episode))
+    plt.figure(figsize=(10, 8))
+
+    for _ in trange(repeat):
+        agent = MCPolicyGradientControl(1/np.power(2, 13))
+        data[0, :] += agent.policy_gradient_control(episode)
+        agent = ReinforceBaseline(1/np.power(2, 9), 1/np.power(2, 6))
+        data[1, :] += agent.policy_gradient_control(episode)
+    data /= repeat
+
+    plt.plot(data[0, :], label=f'REINFORCE \u03B1 = 2^-13')
+    plt.plot(data[1, :], label=f'REINFORCE with baseline \u03B1-\u03B8 = 2^-9, \u03B1-w = 2^-6')
+    plt.xlabel('Episode')
+    plt.ylabel('Total reward on episode')
+    plt.ylim(-60, 0)
+    plt.legend(loc='lower right')
+
+    plt.title(f'repeat = {repeat} t = {int(time.time() - start_time)}s')
+    plt.savefig('images/figure 13.2.png')
     plt.close()
 
 
 if __name__ == "__main__":
     # example_13_1()
-    figure_13_1()
+    # figure_13_1()
+    figure_13_2()
 
 
 
