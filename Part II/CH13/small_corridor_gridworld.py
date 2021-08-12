@@ -243,10 +243,126 @@ def figure_13_2():
     plt.close()
 
 
+class OneStepActorCritic(MCPolicyGradientControl):
+    """One-step Actor-Critic"""
+
+    def __init__(self, step_size_theta, step_size_weight, environment=GridWorld()):
+        super(OneStepActorCritic, self).__init__(step_size_theta, environment)
+        # Settings
+        self.step_size_weight = step_size_weight
+
+        # records
+        self.weight = np.zeros(self.env.world_size)
+
+    def reset(self):
+        """Reset class"""
+        self.theta = [-1.47, 1.47]
+        self.weight = np.zeros(self.env.world_size)
+
+    def policy_gradient_control(self, episodes):
+        """Update policy using one full episode"""
+        self.reset()
+        rewards_record = []
+        for _ in range(episodes):
+            self.env.start_new_episode()
+            i = 1
+            total_reward = 0
+            while not self.env.reached_terminal:
+                state = self.env.state
+                action = self.get_action()
+                reward, next_state = self.env.move()
+                total_reward += reward
+                delta = reward + self.discount * self.weight[next_state] - self.weight[state]
+                self.weight[state] += self.step_size_weight * delta * 1
+                gradient_ln_policy = self.feature_vector(state, action) - np.dot(self.feature, self.policy_prob(state))
+                self.theta += self.step_size * i * delta * gradient_ln_policy
+                i *= self.discount
+            rewards_record.append(total_reward)
+        return rewards_record
+
+
+class ActorCriticEligibilityTraces(MCPolicyGradientControl):
+    """Actor-Critic with Eligibility Traces"""
+
+    def __init__(self, step_size_theta, step_size_weight, trace_rate_weight, trace_rate_theta, environment=GridWorld()):
+        super(ActorCriticEligibilityTraces, self).__init__(step_size_theta, environment)
+        # Settings
+        self.step_size_weight = step_size_weight
+        self.trace_rate_weight = trace_rate_weight
+        self.trace_rate_theta = trace_rate_theta
+
+        # records
+        self.weight = np.zeros(self.env.world_size)
+
+    def reset(self):
+        """Reset class"""
+        self.theta = [-1.47, 1.47]
+        self.weight = np.zeros(self.env.world_size)
+
+    def policy_gradient_control(self, episodes):
+        """Update policy using one full episode"""
+        self.reset()
+        rewards_record = []
+        for _ in range(episodes):
+            self.env.start_new_episode()
+            z_theta = np.zeros(len(self.theta))
+            z_weight = np.zeros(len(self.weight))
+            i = 1
+            total_reward = 0
+            while not self.env.reached_terminal:
+                state = self.env.state
+                action = self.get_action()
+                reward, next_state = self.env.move()
+                total_reward += reward
+                delta = reward + self.discount * self.weight[next_state] - self.weight[state]
+                gradient_ln_policy = self.feature_vector(state, action) - np.dot(self.feature, self.policy_prob(state))
+                z_weight *= self.discount * self.trace_rate_weight
+                z_weight[state] += 1
+                z_theta = self.discount * self.trace_rate_theta * z_theta + i * gradient_ln_policy
+                self.weight += self.step_size_weight * delta * z_weight
+                self.theta += self.step_size * delta * z_theta
+                i *= self.discount
+            rewards_record.append(total_reward)
+        return rewards_record
+
+
+def figure_13_2_2():
+    """Plot figure 13.2"""
+    start_time = time.time()
+    episode = 1500
+    repeat = 1000
+    n_set = 4
+    data = np.zeros((n_set, episode))
+    plt.figure(figsize=(10, 8))
+
+    for _ in trange(repeat):
+        agent = MCPolicyGradientControl(1/np.power(2, 13))
+        data[0, :] += agent.policy_gradient_control(episode)
+        agent = ReinforceBaseline(1/np.power(2, 9), 1/np.power(2, 6))
+        data[1, :] += agent.policy_gradient_control(episode)
+        agent = OneStepActorCritic(1 / np.power(2, 9), 1 / np.power(2, 6))
+        data[2, :] += agent.policy_gradient_control(episode)
+        agent = ActorCriticEligibilityTraces(1 / np.power(2, 9), 1 / np.power(2, 6), 0.9, 0.9)
+        data[3, :] += agent.policy_gradient_control(episode)
+    data /= repeat
+
+    plt.plot(data[0, :], label=f'REINFORCE \u03B1 = 2^-13')
+    plt.plot(data[1, :], label=f'REINFORCE with baseline \u03B1-\u03B8 = 2^-9, \u03B1-w = 2^-6')
+    plt.plot(data[2, :], label=f'One-step Actor-Critic \u03B1-\u03B8 = 2^-9, \u03B1-w = 2^-6')
+    plt.plot(data[3, :], label=f'Actor-Critic with traces \u03B1-\u03B8 = 2^-9, '
+                                    f'\u03B1-w = 2^-6, \u03BB-\u03B8 = \u03BB-w = 0.9')
+    plt.xlabel('Episode')
+    plt.ylabel('Total reward on episode')
+    plt.ylim(-30, -10)
+    plt.legend(loc='lower right')
+
+    plt.title(f'repeat = {repeat} t = {int(time.time() - start_time)}s')
+    plt.savefig('images/figure 13.2.3.png')
+    plt.close()
+
+
 if __name__ == "__main__":
-    # example_13_1()
-    # figure_13_1()
-    figure_13_2()
+    figure_13_2_2()
 
 
 
